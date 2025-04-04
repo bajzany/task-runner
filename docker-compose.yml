@@ -1,0 +1,112 @@
+version: '3.8'
+
+services:
+  mariadb:
+    image: mariadb:10.11
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: task_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: user
+      RABBITMQ_DEFAULT_PASS: user
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "status" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  customer-api:
+    build:
+      context: ./customer-api
+      dockerfile: ./docker/Dockerfile
+    container_name: customer-api
+    env_file:
+      - ./customer-api/.env
+    ports:
+      - "3005:3000"
+    volumes:
+      - "./customer-api:/app:rw"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  executor:
+    build:
+      context: ./executor
+      dockerfile: ./docker/Dockerfile
+    container_name: executor
+    env_file:
+      - ./executor/.env
+    volumes:
+      - "./executor:/app:rw"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      customer-api:
+        condition: service_healthy
+
+  orchestrator:
+    build:
+      context: ./orchestrator
+      dockerfile: ./docker/Dockerfile
+    container_name: orchestrator
+    env_file:
+      - ./orchestrator/.env
+    volumes:
+      - "./orchestrator:/app:rw"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ./docker/Dockerfile
+      args:
+        BUILD_ENV: development
+    container_name: frontend
+    env_file:
+      - ./frontend/.env
+    volumes:
+      - "./frontend:/app:rw"
+      - "/app/build"
+    ports:
+      - "3010:3010"
+      - "3011:80"
+    privileged: true
+    depends_on:
+      customer-api:
+        condition: service_healthy
+
+volumes:
+  mariadb_data:
+  rabbitmq_data:
