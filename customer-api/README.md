@@ -35,7 +35,7 @@
 ## Swagger dokumentace
 
 Služba vystavuje interaktivní dokumentaci na adrese:
-http://localhost:3000/api-docs
+http://localhost:3005/api-docs
 
 
 Swagger generuje dokumentaci automaticky z dekorátorů (`@ApiProperty`, `@ApiTags` atd.).
